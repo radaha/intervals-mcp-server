@@ -162,10 +162,12 @@ async def health_check(_request: Request) -> JSONResponse:
 
 # Run the server
 if __name__ == "__main__":
+    # Validate ATHLETE_ID when server starts (not at import time to allow tests)
+    validate_athlete_id(config.athlete_id)
 
-# Validate ATHLETE_ID when server starts (not at import time to allow tests)
-validate_athlete_id(config.athlete_id)
-
+    # Setup transport and start server
+    selected_transport = setup_transport()
+    start_server(mcp, selected_transport)
     # Setup transport and start server
     selected_transport = setup_transport()
     start_server(mcp, selected_transport)
