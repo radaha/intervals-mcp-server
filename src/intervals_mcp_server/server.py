@@ -152,6 +152,13 @@ __all__ = [
     "coaching_context_protocol",
 ]
 
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
 
 # Run the server
 if __name__ == "__main__":
