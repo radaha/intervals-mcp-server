@@ -156,14 +156,15 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 @mcp.custom_route("/health", methods=["GET"])
-async def health_check(request: Request) -> JSONResponse:
+async def health_check(_request: Request) -> JSONResponse:
+    """Lightweight health check endpoint for keepalive pings."""
     return JSONResponse({"status": "ok"})
-
 
 # Run the server
 if __name__ == "__main__":
-    # Validate ATHLETE_ID when server starts (not at import time to allow tests)
-    validate_athlete_id(config.athlete_id)
+
+# Validate ATHLETE_ID when server starts (not at import time to allow tests)
+validate_athlete_id(config.athlete_id)
 
     # Setup transport and start server
     selected_transport = setup_transport()
