@@ -49,6 +49,9 @@ VALID_EVENT_CATEGORIES: set[str] = {
 }
 
 
+ALLOWED_EVENT_CATEGORIES = ("WORKOUT", "NOTE")
+
+
 def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     name: str,
     workout_type: str,
@@ -56,11 +59,26 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
     workout_doc: WorkoutDoc | None,
     moving_time: int | None,
     distance: int | None,
+    category: str = "WORKOUT",
+    description: str = "",
 ) -> dict[str, Any]:
     """Prepare event data dictionary for API request.
 
     Many arguments are required to match the Intervals.icu API event structure.
     """
+    category = (category or "WORKOUT").upper()
+    if category not in ALLOWED_EVENT_CATEGORIES:
+        raise ValueError(
+            f"Unsupported category '{category}'. Use one of: {', '.join(ALLOWED_EVENT_CATEGORIES)}"
+        )
+    if category == "NOTE":
+        # NOTE events carry plain text only: no sport type, steps or load.
+        return {
+            "start_date_local": start_date + "T00:00:00",
+            "category": "NOTE",
+            "name": name,
+            "description": description or (workout_doc.description if workout_doc else None),
+        }
     resolved_workout_type = resolve_activity_type(name, workout_type)
     return {
         "start_date_local": start_date + "T00:00:00",
@@ -421,6 +439,8 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     workout_doc: WorkoutDoc | None = None,
     moving_time: int = 0,
     distance: int = 0,
+    category: str = "WORKOUT",
+    description: str = "",
 ) -> str:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
@@ -437,6 +457,14 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
         moving_time: Total expected moving time of the workout in seconds (optional). Use 0 (default) to omit from the request; 0 will not be transmitted to the API.
         distance: Total expected distance of the workout in meters (optional). Use 0 (default) to omit from the request; 0 will not be transmitted to the API.
+        category: "WORKOUT" (default) or "NOTE". A NOTE is a plain calendar note: it is not
+            sent to Zwift/Garmin and carries no training load. For NOTE, workout_type,
+            moving_time, distance and workout steps are ignored (pass any workout_type, e.g. "Ride").
+        description: Plain-text body, used for NOTE events.
+
+    Note example:
+        {"category": "NOTE", "workout_type": "Ride", "name": "[LOG] GO",
+         "start_date": "2026-09-24", "description": "GO | ... | 備考"}
 
     Example:
         "workout_doc": {
@@ -496,7 +524,14 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
     try:
         event_data = _prepare_event_data(
-            name, workout_type, start_date, workout_doc, moving_time or None, distance or None
+            name,
+            workout_type,
+            start_date,
+            workout_doc,
+            moving_time or None,
+            distance or None,
+            category=category,
+            description=description,
         )
         return await _create_or_update_event_request(
             athlete_id_to_use, api_key, event_data, start_date, event_id

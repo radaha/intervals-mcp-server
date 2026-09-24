@@ -851,3 +851,55 @@ def test_response_omits_missing_training_context(monkeypatch):
     assert "training load" not in result
     assert "fatigue" not in result
     assert "fitness" not in result
+
+
+# ---------------------------------------------------------------------------
+# NOTE category (daily [LOG] entries)
+# ---------------------------------------------------------------------------
+
+
+def test_note_event_payload(monkeypatch):
+    fake = FakeRequest(response={"id": "n1", "category": "NOTE", "name": "[LOG] GO"})
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake)
+    result = asyncio.run(
+        add_or_update_event(
+            workout_type="Ride",
+            name="[LOG] GO",
+            start_date="2026-09-24",
+            category="NOTE",
+            description="GO | 予定 | 実行 | 備考",
+        )
+    )
+    assert "Successfully created event id: n1" in result
+    data = fake.last_data
+    assert data == {
+        "start_date_local": "2026-09-24T00:00:00",
+        "category": "NOTE",
+        "name": "[LOG] GO",
+        "description": "GO | 予定 | 実行 | 備考",
+    }
+    assert fake.calls[-1]["method"] == "POST"
+
+
+def test_note_category_is_case_insensitive(monkeypatch):
+    fake = FakeRequest(response={"id": "n2"})
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake)
+    asyncio.run(add_or_update_event(workout_type="Ride", name="x", start_date="2026-09-24", category="note"))
+    assert fake.last_data["category"] == "NOTE"
+    assert "type" not in fake.last_data
+
+
+def test_unsupported_category_rejected(monkeypatch):
+    fake = FakeRequest()
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake)
+    result = asyncio.run(add_or_update_event(workout_type="Ride", name="x", category="RACE_A"))
+    assert result.startswith("Error: Unsupported category")
+    assert fake.calls == []
+
+
+def test_default_category_still_workout(monkeypatch):
+    fake = FakeRequest()
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake)
+    asyncio.run(add_or_update_event(workout_type="Ride", name="Z2", start_date="2026-09-24"))
+    assert fake.last_data["category"] == "WORKOUT"
+    assert fake.last_data["type"] == "Ride"
