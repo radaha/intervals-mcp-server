@@ -19,6 +19,7 @@ import intervals_mcp_server.tools.activities  # noqa: E402, F401
 import intervals_mcp_server.tools.events  # noqa: E402, F401
 import intervals_mcp_server.tools.wellness  # noqa: E402, F401
 import intervals_mcp_server.tools.daily_metrics  # noqa: E402, F401
+import intervals_mcp_server.tools.weekly_metrics  # noqa: E402, F401
 import intervals_mcp_server.tools.custom_items  # noqa: E402, F401
 import intervals_mcp_server.tools.athlete  # noqa: E402, F401
 import intervals_mcp_server.tools.power_curves  # noqa: E402, F401
@@ -74,6 +75,11 @@ EXPECTED_ANNOTATIONS = {
     },
     "get_daily_metrics": {
         "title": "Get Daily Metrics",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    },
+    "get_weekly_progression_metrics": {
+        "title": "Get Weekly Progression Metrics",
         "readOnlyHint": True,
         "destructiveHint": False,
     },

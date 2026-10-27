@@ -32,6 +32,7 @@ tools/
                    # delete_event, delete_events_by_date_range
   wellness.py      # get_wellness_data
   daily_metrics.py # get_daily_metrics (fetches data; arithmetic is in utils/coach_metrics.py)
+  weekly_metrics.py # get_weekly_progression_metrics (arithmetic in utils/weekly_metrics.py)
   athlete.py       # get_athlete_zones
   power_curves.py  # get_athlete_power_curves
   training_summary.py # get_training_summary
@@ -47,6 +48,7 @@ utils/
   dates.py         # Date range utilities
   types.py         # Dataclasses & enums: Value, Step, WorkoutDoc, TransportAliases, etc.
   coach_metrics.py # Pure (no I/O) daily-condition rule engine behind get_daily_metrics
+  weekly_metrics.py # Pure weekly load-increase criteria (a-f) behind get_weekly_progression_metrics
 
 tests/
 test_server.py                 # Main tool tests (monkeypatched API calls)

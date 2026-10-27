@@ -83,6 +83,7 @@ Once connected, the following tools are available:
 
 **Wellness & Training**
 - `get_wellness_data` — Fetch wellness data
+- `get_weekly_progression_metrics` — Evaluate criteria a-f of a weekly load-increase rule in code (decision log, HRV/RHR/sleep/TSB, cancelled or shortened sessions, weekly TSS and CTL rise) and return a provisional INCREASE_OK / HOLD / REDUCE verdict (read-only)
 - `get_daily_metrics` — Evaluate the numeric rows of a daily GO/TRIM/SWAP/STOP decision table in code (TSB, HRV/RHR trends, sleep, yesterday's RPE/Feel) and return per-rule evidence (read-only)
 - `get_training_summary` — Get a training load summary
 - `get_athlete_power_curves` — Get best power output curves for selected durations and time periods
