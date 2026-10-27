@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `get_daily_metrics` tool (read-only): computes the numeric rules of a daily
+  GO/TRIM/SWAP/STOP decision table in code and returns per-rule evidence
+  (`hit` / `clear` / `no_data` / `needs_input`) with a provisional numeric verdict.
+  Arithmetic lives in `utils/coach_metrics.py`; day boundaries are JST, TSB is the
+  previous day's end value, and Feel uses the 1 = best scale.
 - OAuth 2.0 (authorization code + PKCE) for the HTTP transport. Optional; activates
   only when `MCP_CLIENT_ID` and `MCP_CLIENT_SECRET` are set (`MCP_SERVER_URL` required
   for discovery). stdio transport is unaffected.
