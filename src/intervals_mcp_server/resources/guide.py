@@ -110,6 +110,8 @@ AVAILABLE TOOLS
   get_wellness_data         Daily wellness entries (HRV, sleep, weight etc).
   get_daily_metrics         Daily-condition rules computed in code (TSB, HRV/RHR trends,
                             sleep, yesterday's RPE/Feel). Quote its numbers; do not recompute.
+  get_weekly_progression_metrics  Weekly load-increase criteria a-f computed in code
+                            (decision log, HRV/RHR/sleep/TSB, sessions, TSS, CTL rise).
   get_events                Calendar events — planned workouts, races, notes.
   get_event_by_id           Single event detail.
   add_or_update_event       Create or update a planned workout on the calendar.

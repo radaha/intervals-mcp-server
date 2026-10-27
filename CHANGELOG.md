@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `get_weekly_progression_metrics` tool (read-only): evaluates criteria a-f of the weekly
+  load-increase rule in `utils/weekly_metrics.py` (decision log from `[LOG]` notes, HRV/RHR
+  7-day trends, TSB, sleep, cancelled/shortened planned sessions) with weekly TSS and CTL
+  rise against the guideline numbers. Anything that needs the athlete (illness watch,
+  previous weeks' increases, TrainerRoad block structure, approval) is reported as input
+  needed, not guessed.
 - `get_daily_metrics` tool (read-only): computes the numeric rules of a daily
   GO/TRIM/SWAP/STOP decision table in code and returns per-rule evidence
   (`hit` / `clear` / `no_data` / `needs_input`) with a provisional numeric verdict.
