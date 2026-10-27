@@ -83,6 +83,7 @@ Once connected, the following tools are available:
 
 **Wellness & Training**
 - `get_wellness_data` — Fetch wellness data
+- `get_daily_metrics` — Evaluate the numeric rows of a daily GO/TRIM/SWAP/STOP decision table in code (TSB, HRV/RHR trends, sleep, yesterday's RPE/Feel) and return per-rule evidence (read-only)
 - `get_training_summary` — Get a training load summary
 - `get_athlete_power_curves` — Get best power output curves for selected durations and time periods
 - `get_athlete_zones` — Get athlete training zones (power, HR, pace, etc.)

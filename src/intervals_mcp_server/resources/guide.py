@@ -108,6 +108,8 @@ AVAILABLE TOOLS
   get_activity_intervals    Interval breakdown for a structured activity.
   get_activity_streams      Raw time-series streams (power, HR, cadence etc).
   get_wellness_data         Daily wellness entries (HRV, sleep, weight etc).
+  get_daily_metrics         Daily-condition rules computed in code (TSB, HRV/RHR trends,
+                            sleep, yesterday's RPE/Feel). Quote its numbers; do not recompute.
   get_events                Calendar events — planned workouts, races, notes.
   get_event_by_id           Single event detail.
   add_or_update_event       Create or update a planned workout on the calendar.
