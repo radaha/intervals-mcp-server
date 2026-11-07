@@ -24,6 +24,7 @@ from intervals_mcp_server.tools.daily_metrics import (
 )
 from intervals_mcp_server.utils.coach_metrics import BASELINE_DAYS, JST, RECENT_DAYS
 from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
+from intervals_mcp_server.utils.intensity_review import sessions_needing_zone_times
 from intervals_mcp_server.utils.weekly_metrics import compute_weekly_progression
 
 # Import mcp instance from shared module for tool registration
@@ -35,6 +36,28 @@ config = get_config()
 # comparison, and the 28 days are the EF baseline of the intensity review.
 ACTIVITY_LOOKBACK_DAYS = RECENT_DAYS + BASELINE_DAYS
 ACTIVITY_LIMIT = 400
+
+
+async def _merge_zone_times(day: date, activities: list[dict] | None, api_key: str) -> list[str]:
+    """Fill ``icu_zone_times`` of the week's sessions from the per-activity endpoint.
+
+    Returns the IDs whose details could not be fetched.
+    """
+    ids = sessions_needing_zone_times(day, activities)
+    if not ids or activities is None:
+        return []
+    results = await asyncio.gather(
+        *(make_intervals_request(url=f"/activity/{aid}", api_key=api_key) for aid in ids)
+    )
+    by_id = {str(a.get("id")): a for a in activities}
+    failed: list[str] = []
+    for aid, result in zip(ids, results, strict=True):
+        zones = result.get("icu_zone_times") if isinstance(result, dict) else None
+        if _error_message(result) or not isinstance(zones, list):
+            failed.append(aid)
+            continue
+        by_id[aid]["icu_zone_times"] = zones
+    return failed
 
 
 @mcp.tool(
@@ -109,10 +132,12 @@ async def get_weekly_progression_metrics(
 
     activities_error = _error_message(activities_result)
     events_error = _error_message(events_result)
+    activities = None if activities_error else _as_dict_list(activities_result)
+    zone_fetch_failed = await _merge_zone_times(day, activities, api_key)
     metrics = compute_weekly_progression(
         day,
         _wellness_by_date(wellness_result),
-        None if activities_error else _as_dict_list(activities_result),
+        activities,
         None if events_error else _as_dict_list(events_result),
     )
     data_errors: dict[str, str] = {}
@@ -120,6 +145,10 @@ async def get_weekly_progression_metrics(
         data_errors["activities"] = activities_error
     if events_error:
         data_errors["events"] = events_error
+    if zone_fetch_failed:
+        data_errors["zone_times"] = (
+            f"activity details could not be fetched for {', '.join(zone_fetch_failed)}"
+        )
     if data_errors:
         metrics["data_errors"] = data_errors
     return json.dumps(metrics, ensure_ascii=False)

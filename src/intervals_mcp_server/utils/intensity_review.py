@@ -172,6 +172,29 @@ def _view(activity: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+MAX_ZONE_DETAIL_FETCHES = 20
+
+
+def sessions_needing_zone_times(target: date, activities: list[dict[str, Any]] | None) -> list[str]:
+    """IDs of completed-week training sessions without ``icu_zone_times``.
+
+    The activity list endpoint does not return zone times; the per-activity endpoint
+    does. The tool fetches these (at most ``MAX_ZONE_DETAIL_FETCHES``) and merges them in.
+    """
+    if not activities:
+        return []
+    week_start = target - timedelta(days=7)
+    week_end = target - timedelta(days=1)
+    ids: list[str] = []
+    for act in activities:
+        day = activity_local_date(act)
+        if day is None or not week_start <= day <= week_end:
+            continue
+        if _is_training_session(act) and _zone_seconds(act) is None and act.get("id"):
+            ids.append(str(act["id"]))
+    return ids[:MAX_ZONE_DETAIL_FETCHES]
+
+
 def compute_intensity_review(
     target: date, activities: list[dict[str, Any]] | None
 ) -> dict[str, Any]:

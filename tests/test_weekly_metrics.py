@@ -317,3 +317,38 @@ def test_verdict_range_shows_both_extremes_when_a_criterion_lacks_data():
         "if_missing_all_fail": "HOLD",
     }
     assert run()["verdict_range"] is None
+
+
+def test_tool_fetches_zone_times_from_activity_details(monkeypatch):
+    week_ride = {**ride(WEEK[2], None), "id": "i100", "icu_intensity": 60}
+    other = {**ride(WEEK[3], None), "id": "i200", "icu_intensity": 60}
+    old_ride = {**ride(WEEK[0] - timedelta(days=3), None), "id": "i300"}
+    details = {
+        "/activity/i100": {"id": "i100", "icu_zone_times": [{"id": "Z2", "secs": 3600}]},
+        "/activity/i200": {"error": True, "message": "boom"},
+    }
+    fetched: list[str] = []
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs["url"]
+        if url.endswith("/wellness"):
+            return list(make_wellness().values())
+        if url.endswith("/activities"):
+            return [week_ride, other, old_ride]
+        if url.endswith("/events"):
+            return all_go()
+        if url in details:
+            fetched.append(url)
+            return details[url]
+        raise AssertionError(f"unexpected url {url}")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.weekly_metrics.make_intervals_request", fake_request
+    )
+    result = _call()
+    assert sorted(fetched) == ["/activity/i100", "/activity/i200"]  # baseline ride not fetched
+    share = result["intensity_review"]["time_share"]
+    assert share["z1_2"] == 1.0
+    assert share["excluded_secs_without_power_zones"] == 3600
+    assert "i200" in result["data_errors"]["zone_times"]
+    assert result["numeric_verdict"] == "INCREASE_OK"
