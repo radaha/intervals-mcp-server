@@ -277,7 +277,7 @@ def test_tool_returns_json_and_requests_the_right_windows(monkeypatch):
     assert result["numeric_verdict"] == "INCREASE_OK"
     params = {url.rsplit("/", 1)[-1]: p for url, p in calls}
     assert params["activities"]["newest"] == "2026-10-26"
-    assert params["activities"]["oldest"] == "2026-10-13"
+    assert params["activities"]["oldest"] == "2026-09-22"  # week + 28-day EF baseline
     assert params["events"] == {"oldest": "2026-10-20", "newest": "2026-10-27"}
     assert params["wellness"]["newest"] == "2026-10-27"
 

@@ -22,7 +22,7 @@ from intervals_mcp_server.tools.daily_metrics import (
     _error_payload,
     _wellness_by_date,
 )
-from intervals_mcp_server.utils.coach_metrics import JST, RECENT_DAYS
+from intervals_mcp_server.utils.coach_metrics import BASELINE_DAYS, JST, RECENT_DAYS
 from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
 from intervals_mcp_server.utils.weekly_metrics import compute_weekly_progression
 
@@ -31,8 +31,9 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
-# Completed week plus the week before it (for the weekly TSS comparison).
-ACTIVITY_LOOKBACK_DAYS = 2 * RECENT_DAYS
+# Completed week plus the 28 days before it: the week before is the weekly TSS
+# comparison, and the 28 days are the EF baseline of the intensity review.
+ACTIVITY_LOOKBACK_DAYS = RECENT_DAYS + BASELINE_DAYS
 ACTIVITY_LIMIT = 400
 
 
@@ -53,7 +54,11 @@ async def get_weekly_progression_metrics(
     REDUCE = 抑制), the week's decision log read from the [LOG] notes, weekly TSS and
     CTL rise against the guideline numbers, and a ``needs_input`` list of what only the
     athlete can decide (illness watch, previous weeks' increases, TrainerRoad block
-    structure, approval). All numbers are computed in code: quote them as returned, do
+    structure, approval). ``intensity_review`` is an observation only (it never changes
+    the verdict): hard / moderate / easy session counts (IF >= 85% / 70-85% / < 70%),
+    power-zone time share, and flags for back-to-back hard days, more than 3 hard
+    sessions, and sessions whose EF (NP / mean HR) is >= 5% below the 28-day baseline of
+    the same environment (indoor / outdoor). All numbers are computed in code: quote them as returned, do
     not recompute them.
 
     Day boundaries use Japan Standard Time (UTC+9). The completed week is the 7 days
