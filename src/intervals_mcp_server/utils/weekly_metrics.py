@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
+from intervals_mcp_server.utils.intensity_review import compute_intensity_review
 from intervals_mcp_server.utils.coach_metrics import (
     HRV_7D_SD_MULT,
     MIN_RECENT_VALID,
@@ -403,6 +404,7 @@ def compute_weekly_progression(
         "decision_log": {d.isoformat(): verdicts.get(d) for d in week},
         "illness_tags": tags,
         "load": load,
+        "intensity_review": compute_intensity_review(target, activities),
         "needs_input": needs_input,
         "provisional_reasons": provisional,
         "definitions": DEFINITIONS,
