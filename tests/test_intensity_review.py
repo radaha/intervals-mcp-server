@@ -144,13 +144,14 @@ def test_hr_power_mismatch_flagged_at_5_percent_drop():
     assert flag["hit"] is True
     assert [s["date"] for s in flag["sessions"]] == [WEEK[3].isoformat()]
     assert flag["sessions"][0]["environment"] == "indoor"
-    assert review["ef_baseline"]["indoor"]["sessions"] == 5
+    assert review["ef_baseline"]["indoor/easy"]["sessions"] == 5
+    assert flag["sessions"][0]["intensity_class"] == "easy"
 
 
 def test_hr_power_mismatch_needs_baseline_and_hr():
     review = compute_intensity_review(
         TARGET,
-        indoor_baseline(count=4) + [session(WEEK[3], np_watts=150, hr=150), session(WEEK[4], hr=0)],
+        indoor_baseline(count=2) + [session(WEEK[3], np_watts=150, hr=150), session(WEEK[4], hr=0)],
     )
     flag = review["flags"]["hr_power_mismatch"]
     assert flag["hit"] is False
@@ -213,3 +214,22 @@ def test_trainerroad_session_without_moving_time_uses_elapsed_time():
     tr["elapsed_time"] = 3600
     flag = compute_intensity_review(TARGET, base + [tr])["flags"]["hr_power_mismatch"]
     assert flag["hit"] is True
+
+
+def test_easy_session_not_compared_with_harder_baseline():
+    # Baseline of sweet-spot sessions (EF 1.06) must not flag a Z2 ride (EF 0.98).
+    first = TARGET - timedelta(days=30)
+    harder = [
+        session(first + timedelta(days=i), if_pct=80, np_watts=1.06 * 140, hr=140) for i in range(8)
+    ]
+    z2 = session(WEEK[3], if_pct=62, np_watts=126, hr=128)
+    flag = compute_intensity_review(TARGET, harder + [z2])["flags"]["hr_power_mismatch"]
+    assert flag["hit"] is False
+    assert flag["no_baseline_count"] == 1
+
+
+def test_unclassified_session_skipped_for_ef():
+    tr = session(WEEK[3], if_pct=0, np_watts=150, hr=160)
+    flag = compute_intensity_review(TARGET, indoor_baseline() + [tr])["flags"]["hr_power_mismatch"]
+    assert flag["hit"] is False
+    assert flag["unclassified_count"] == 1

@@ -81,8 +81,8 @@ async def get_weekly_progression_metrics(
     the verdict): hard / moderate / easy session counts (IF >= 85% / 70-85% / < 70%),
     power-zone time share, and flags for back-to-back hard days, more than 3 hard
     sessions, and sessions whose EF (NP / mean HR) is >= 5% below the 28-day baseline of
-    the same environment (indoor / outdoor). All numbers are computed in code: quote them as returned, do
-    not recompute them.
+    the same environment (indoor / outdoor) and intensity class. All numbers are
+    computed in code: quote them as returned, do not recompute them.
 
     Day boundaries use Japan Standard Time (UTC+9). The completed week is the 7 days
     ending the day before the review day. Run it on the review day (Sunday).
