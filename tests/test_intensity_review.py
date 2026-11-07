@@ -204,3 +204,12 @@ def test_weekly_progression_includes_review_without_changing_verdict():
     ]
     assert result_with["numeric_verdict"] == result_without["numeric_verdict"]
     assert result_with["no_data_criteria"] == result_without["no_data_criteria"]
+
+
+def test_trainerroad_session_without_moving_time_uses_elapsed_time():
+    base = indoor_baseline()
+    tr = session(WEEK[3], np_watts=150, hr=140, minutes=60, trainer=True)
+    tr["moving_time"] = None
+    tr["elapsed_time"] = 3600
+    flag = compute_intensity_review(TARGET, base + [tr])["flags"]["hr_power_mismatch"]
+    assert flag["hit"] is True

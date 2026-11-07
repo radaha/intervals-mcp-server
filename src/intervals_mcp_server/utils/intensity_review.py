@@ -67,6 +67,15 @@ DEFINITIONS = {
 }
 
 
+def _duration_secs(activity: dict[str, Any]) -> float:
+    """Moving time, else elapsed time (TrainerRoad indoor sessions often lack moving_time)."""
+    for key in ("moving_time", "elapsed_time"):
+        value = _num(activity.get(key))
+        if value is not None and value > 0:
+            return value
+    return 0.0
+
+
 def _is_training_session(activity: dict[str, Any]) -> bool:
     return is_evaluable(activity) and not _is_short_ride(activity)
 
@@ -138,7 +147,7 @@ def _time_share(sessions: list[dict[str, Any]]) -> dict[str, Any]:
     for act in sessions:
         zones = _zone_seconds(act)
         if zones is None:
-            without_zones += _num(act.get("moving_time")) or 0.0
+            without_zones += _duration_secs(act)
             continue
         buckets["z1_2"] += sum(zones[:2])
         buckets["z3"] += zones[2] if len(zones) > 2 else 0.0
@@ -218,7 +227,7 @@ def compute_intensity_review(
     base_ef: dict[str, list[float]] = {"indoor": [], "outdoor": []}
     for act in baseline:
         ef = efficiency_factor(act)
-        if ef is not None and (_num(act.get("moving_time")) or 0) >= EF_MIN_MOVING_SECS:
+        if ef is not None and _duration_secs(act) >= EF_MIN_MOVING_SECS:
             base_ef[_environment(act)].append(ef)
     baseline_view = {
         env: {
@@ -232,7 +241,7 @@ def compute_intensity_review(
     no_hr = 0
     no_baseline = 0
     for act in week:
-        if (_num(act.get("moving_time")) or 0) < EF_MIN_MOVING_SECS:
+        if _duration_secs(act) < EF_MIN_MOVING_SECS:
             continue
         ef = efficiency_factor(act)
         if ef is None:
