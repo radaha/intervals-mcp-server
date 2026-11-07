@@ -17,7 +17,8 @@ Flags:
 * ``back_to_back_hard``  - hard sessions on two consecutive JST days.
 * ``hard_count_over_3``  - four or more hard sessions in the completed week.
 * ``hr_power_mismatch``  - a session whose efficiency factor (NP / mean HR) is at least
-  5% below the median EF of the same environment (indoor / outdoor) over the 28 days
+  5% below the median EF of the same environment (indoor / outdoor) and intensity
+  class over the 28 days
   right before the completed week. Indoor ERG fixes NP, so a heart-rate drift shows up
   as a lower EF. Outdoor NP varies with wind and gradient, so outdoor flags are noisier.
 """
@@ -45,8 +46,12 @@ MODERATE_IF_PCT = 70.0
 HARD_COUNT_MAX = 3
 EF_DROP_PCT = 5.0
 EF_MIN_MOVING_SECS = 30 * 60
-EF_MIN_BASELINE_SESSIONS = 5
-DEFINITIONS_VERSION = "v0.1"
+# Provisional: TrainerRoad base weeks give about one indoor session per class per week,
+# so 4 weeks hold 3-5 sessions per class.
+EF_MIN_BASELINE_SESSIONS = 3
+DEFINITIONS_VERSION = "v0.2"
+ENVIRONMENTS = ("indoor", "outdoor")
+CLASSIFIED = ("hard", "moderate", "easy")
 
 DEFINITIONS = {
     "version": DEFINITIONS_VERSION,
@@ -60,7 +65,8 @@ DEFINITIONS = {
     "hard_count_over_3": f"more than {HARD_COUNT_MAX} hard sessions in the completed week",
     "hr_power_mismatch": (
         f"session >= {EF_MIN_MOVING_SECS // 60} min with power and HR whose EF (NP / mean HR) "
-        f"is >= {EF_DROP_PCT:g}% below the median EF of the same environment over the "
+        f"is >= {EF_DROP_PCT:g}% below the median EF of the same environment and intensity "
+        "class (hard / moderate / easy) over the "
         f"{BASELINE_DAYS} days before the completed week (needs >= {EF_MIN_BASELINE_SESSIONS} "
         "baseline sessions)"
     ),
@@ -162,6 +168,10 @@ def _time_share(sessions: list[dict[str, Any]]) -> dict[str, Any]:
     return share
 
 
+def _baseline_key(environment: str, intensity_class: str) -> str:
+    return f"{environment}/{intensity_class}"
+
+
 def _view(activity: dict[str, Any]) -> dict[str, Any]:
     day = activity_local_date(activity)
     return {
@@ -246,23 +256,28 @@ def compute_intensity_review(
         "max": HARD_COUNT_MAX,
     }
 
-    # EF baseline per environment
-    base_ef: dict[str, list[float]] = {"indoor": [], "outdoor": []}
+    # EF baseline per environment and intensity class: EF rises with output, so a Z2
+    # ride compared with sweet-spot sessions would look like an HR drift.
+    base_ef: dict[str, list[float]] = {
+        _baseline_key(env, cls): [] for env in ENVIRONMENTS for cls in CLASSIFIED
+    }
     for act in baseline:
         ef = efficiency_factor(act)
-        if ef is not None and _duration_secs(act) >= EF_MIN_MOVING_SECS:
-            base_ef[_environment(act)].append(ef)
+        cls = _intensity_class(act)
+        if ef is not None and cls in CLASSIFIED and _duration_secs(act) >= EF_MIN_MOVING_SECS:
+            base_ef[_baseline_key(_environment(act), cls)].append(ef)
     baseline_view = {
-        env: {
+        key: {
             "sessions": len(values),
             "median_ef": _round(median(values), 3) if values else None,
         }
-        for env, values in base_ef.items()
+        for key, values in base_ef.items()
     }
 
     mismatches: list[dict[str, Any]] = []
     no_hr = 0
     no_baseline = 0
+    unclassified_skipped = 0
     for act in week:
         if _duration_secs(act) < EF_MIN_MOVING_SECS:
             continue
@@ -271,8 +286,13 @@ def compute_intensity_review(
             if _mean_hr(act) is None:
                 no_hr += 1
             continue
+        cls = _intensity_class(act)
+        if cls not in CLASSIFIED:
+            unclassified_skipped += 1
+            continue
         env = _environment(act)
-        values = base_ef[env]
+        key = _baseline_key(env, cls)
+        values = base_ef[key]
         if len(values) < EF_MIN_BASELINE_SESSIONS:
             no_baseline += 1
             continue
@@ -283,8 +303,10 @@ def compute_intensity_review(
                 {
                     **_view(act),
                     "environment": env,
+                    "intensity_class": cls,
                     "ef": _round(ef, 3),
                     "baseline_ef": _round(ref, 3),
+                    "baseline_sessions": len(values),
                     "diff_pct": _round(diff_pct, 1),
                 }
             )
@@ -293,6 +315,7 @@ def compute_intensity_review(
         "sessions": mismatches,
         "no_hr_count": no_hr,
         "no_baseline_count": no_baseline,
+        "unclassified_count": unclassified_skipped,
     }
 
     hits = [
