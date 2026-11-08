@@ -1,25 +1,24 @@
-name: Keep Render service awake
-
-on:
-  schedule:
-    # 10分おき。GitHub Actionsのcronは負荷状況により数分の遅延が起きうる点に注意。
-    - cron: '*/10 * * * *'
-  workflow_dispatch: {}
-
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Ping Render /mcp endpoint
         run: |
           URL="https://intervals-mcp-server-uvr8.onrender.com/mcp"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$URL")
-          echo "HTTP status: $STATUS"
+          STATUS="000"
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 100 "$URL" || true)
+            echo "attempt $i: HTTP status: $STATUS"
+            if [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ]; then break; fi
+            sleep 10
+          done
 
           if [ "$STATUS" = "401" ]; then
             echo "OK: OAuth保護が正しく機能した状態でプロセスを起こせました。"
           elif [ "$STATUS" = "200" ]; then
             echo "::warning::200が返りました。OAuth保護が外れている可能性があるため確認してください。"
           else
-            echo "::warning::想定外のステータス($STATUS)。Renderのログを確認してください。"
+            echo "::error::3回試しても応答がありません（status=$STATUS）。Renderのログを確認してください。"
+            exit 1
           fi
