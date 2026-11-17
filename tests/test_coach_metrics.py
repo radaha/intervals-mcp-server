@@ -391,3 +391,58 @@ def test_highest_load_session_of_the_day_is_the_yesterday_session():
     result = run(activities=[big, small])
     assert result["yesterday_session"]["load"] == 118
     assert rule(result, "R09")["status"] == "hit"
+
+
+# --- data quality -----------------------------------------------------------------------
+def test_data_quality_is_ok_with_full_history():
+    dq = run()["data_quality"]
+    assert dq["status"] == "ok"
+    assert dq["issues"] == []
+    assert dq["device_sync_suspected"] is False
+    hrv = dq["fields"]["hrv"]
+    assert hrv["today"] is True and hrv["age_days"] == 0
+    assert hrv["baseline_single_day_n"] == 28 and hrv["baseline_single_day_ready"] is True
+    assert hrv["recent_7d_n"] == 7
+    # make_wellness covers 40 days: the 7-day rule baseline (days 7..34 ago) is full.
+    assert hrv["baseline_7d_rule_n"] == 28
+    assert dq["fields"]["load"] == {"tsb_basis_date": YESTERDAY, "available": True}
+
+
+def test_row_without_device_values_flags_a_pending_sync_and_keeps_the_rules():
+    wellness = make_wellness()
+    today = TARGET.isoformat()
+    wellness[today].update({"hrv": None, "restingHR": None, "sleepSecs": None})
+    result = run(wellness)
+    dq = result["data_quality"]
+    assert result["wellness_status"]["status"] == "ok"
+    assert dq["status"] == "degraded"
+    assert dq["device_sync_suspected"] is True
+    assert dq["fields"]["hrv"]["today"] is False
+    assert dq["fields"]["hrv"]["latest_date"] == YESTERDAY
+    assert dq["fields"]["hrv"]["age_days"] == 1
+    assert f"hrv missing for the target date (latest: {YESTERDAY})" in dq["issues"]
+    # Informational only: the verdict logic is unchanged (R04 has no data -> no verdict).
+    assert rule(result, "R04")["status"] == "no_data"
+    assert result["numeric_verdict"] is None
+
+
+def test_short_history_reports_baseline_sample_counts():
+    result = run(make_wellness(days=20))
+    hrv = result["data_quality"]["fields"]["hrv"]
+    assert hrv["baseline_single_day_n"] == 19
+    assert hrv["baseline_single_day_ready"] is True
+    assert hrv["baseline_7d_rule_n"] == 13
+    assert hrv["baseline_7d_rule_ready"] is False
+    assert any("7-day rule has 13 valid days" in i for i in result["data_quality"]["issues"])
+
+
+def test_missing_sources_are_reported():
+    result = compute_daily_metrics(TARGET, make_wellness(), None, None)
+    dq = result["data_quality"]
+    assert dq["sources"] == {
+        "wellness": "ok",
+        "activities": "unavailable",
+        "planned_events": "unavailable",
+    }
+    assert "activities could not be fetched" in dq["issues"]
+    assert "planned events could not be fetched" in dq["issues"]

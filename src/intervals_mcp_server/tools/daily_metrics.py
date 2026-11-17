@@ -100,6 +100,12 @@ async def get_daily_metrics(
     the best, so poor means >= 4. If the wellness row for the date is missing, no
     verdict is returned.
 
+    ``data_quality`` reports, for HRV, RHR and sleep, whether today's value exists,
+    the latest date with a value, and how many valid days fed each baseline (minimum
+    14 for a baseline, 4 for a 7-day window). ``device_sync_suspected`` is true when
+    today's row exists but has no HRV, RHR or sleep (the watch has probably not
+    synced yet). It is informational and never changes a rule or the verdict.
+
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
