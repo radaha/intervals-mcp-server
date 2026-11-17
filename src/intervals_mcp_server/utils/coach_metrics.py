@@ -29,7 +29,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 JST = timezone(timedelta(hours=9))
 
@@ -69,6 +69,10 @@ DEFINITIONS = {
     ),
     "high_intensity_day": "planned workout IF (icu_intensity, percent) >= threshold",
     "feel_scale": "1 = best, 5 = worst; poor means >= 4",
+    "data_quality": (
+        "freshness and valid-day counts behind each signal; informational only, it "
+        "never changes a rule status or the verdict"
+    ),
     "evaluable_devices": (
         "Garmin Edge 840, Zwift and TrainerRoad (device TRAINER_ROAD); Edge 530 is a commute bike"
     ),
@@ -502,6 +506,144 @@ def _observations(
     return obs
 
 
+# --- data quality (does not change the verdict) ----------------------------------
+def _latest_date_with(
+    wellness: dict[str, dict[str, Any]],
+    target: date,
+    value_of: Callable[[dict[str, Any] | None], float | None],
+) -> str | None:
+    """Most recent day on or before ``target`` whose row has a value."""
+    for day in sorted((d for d in wellness if d <= target.isoformat()), reverse=True):
+        if value_of(wellness.get(day)) is not None:
+            return day
+    return None
+
+
+def _count_valid(
+    wellness: dict[str, dict[str, Any]],
+    value_of: Callable[[dict[str, Any] | None], float | None],
+    start: date,
+    end: date,
+) -> int:
+    return sum(
+        1
+        for offset in range((end - start).days + 1)
+        if value_of(wellness.get((start + timedelta(days=offset)).isoformat())) is not None
+    )
+
+
+def _field_quality(
+    wellness: dict[str, dict[str, Any]],
+    target: date,
+    value_of: Callable[[dict[str, Any] | None], float | None],
+    with_baselines: bool,
+) -> dict[str, Any]:
+    latest = _latest_date_with(wellness, target, value_of)
+    out: dict[str, Any] = {
+        "today": value_of(wellness.get(target.isoformat())) is not None,
+        "latest_date": latest,
+        "age_days": (target - date.fromisoformat(latest)).days if latest else None,
+    }
+    if with_baselines:
+        # S1/S2: the 28 days before today.
+        single_n = _count_valid(
+            wellness, value_of, target - timedelta(days=BASELINE_DAYS), target - timedelta(days=1)
+        )
+        # R06/R07: the 7 days ending today, and the 28 days right before them.
+        window_start = target - timedelta(days=RECENT_DAYS - 1)
+        recent_n = _count_valid(wellness, value_of, window_start, target)
+        trend_n = _count_valid(
+            wellness,
+            value_of,
+            window_start - timedelta(days=BASELINE_DAYS),
+            window_start - timedelta(days=1),
+        )
+        out.update(
+            {
+                "baseline_single_day_n": single_n,
+                "baseline_single_day_ready": single_n >= MIN_BASELINE_VALID,
+                "recent_7d_n": recent_n,
+                "recent_7d_ready": recent_n >= MIN_RECENT_VALID,
+                "baseline_7d_rule_n": trend_n,
+                "baseline_7d_rule_ready": trend_n >= MIN_BASELINE_VALID,
+            }
+        )
+    return out
+
+
+def _data_quality(
+    wellness: dict[str, dict[str, Any]],
+    target: date,
+    activities_available: bool,
+    events_available: bool,
+) -> dict[str, Any]:
+    """Freshness and sample counts behind each signal, with plain-language issues.
+
+    Reported for the LLM so it can say *why* a rule lacks data (for example a
+    Garmin sync that has not run yet). It never changes a rule's status.
+    """
+
+    def getter(key: str) -> Callable[[dict[str, Any] | None], float | None]:
+        return lambda entry: _num(entry.get(key)) if entry else None
+
+    fields: dict[str, dict[str, Any]] = {
+        "hrv": _field_quality(wellness, target, getter("hrv"), with_baselines=True),
+        "rhr": _field_quality(wellness, target, getter("restingHR"), with_baselines=True),
+        "sleep": _field_quality(wellness, target, sleep_hours, with_baselines=False),
+    }
+    prev = (target - timedelta(days=1)).isoformat()
+    load_ok = tsb_of(wellness.get(prev)) is not None
+    fields["load"] = {"tsb_basis_date": prev, "available": load_ok}
+
+    issues: list[str] = []
+    row_exists = target.isoformat() in wellness
+    if not row_exists:
+        issues.append("no wellness row for the target date")
+    for name in ("hrv", "rhr", "sleep"):
+        info = fields[name]
+        if not info["today"]:
+            latest = info["latest_date"] or "none in range"
+            issues.append(f"{name} missing for the target date (latest: {latest})")
+    for name in ("hrv", "rhr"):
+        info = fields[name]
+        if not info["baseline_single_day_ready"]:
+            issues.append(
+                f"{name} 28-day baseline (S1/S2) has {info['baseline_single_day_n']} valid days "
+                f"(< {MIN_BASELINE_VALID})"
+            )
+        if not info["baseline_7d_rule_ready"]:
+            issues.append(
+                f"{name} baseline for the 7-day rule has {info['baseline_7d_rule_n']} valid days "
+                f"(< {MIN_BASELINE_VALID})"
+            )
+        if not info["recent_7d_ready"]:
+            issues.append(
+                f"{name} 7-day window has {info['recent_7d_n']} valid days (< {MIN_RECENT_VALID})"
+            )
+    if not load_ok:
+        issues.append(f"CTL/ATL missing for {prev}")
+    if not activities_available:
+        issues.append("activities could not be fetched")
+    if not events_available:
+        issues.append("planned events could not be fetched")
+
+    # A row that exists but has none of the device-sourced values usually means
+    # intervals.icu created it from load alone and the watch has not synced yet.
+    sync_pending = row_exists and not any(fields[n]["today"] for n in ("hrv", "rhr", "sleep"))
+    return {
+        "status": "ok" if not issues else "degraded",
+        "issues": issues,
+        "device_sync_suspected": sync_pending,
+        "fields": fields,
+        "sources": {
+            "wellness": "ok",
+            "activities": "ok" if activities_available else "unavailable",
+            "planned_events": "ok" if events_available else "unavailable",
+        },
+        "minimum_valid_days": {"baseline": MIN_BASELINE_VALID, "recent_7d": MIN_RECENT_VALID},
+    }
+
+
 # --- main entry point -----------------------------------------------------------
 def compute_daily_metrics(
     target: date,
@@ -615,6 +757,9 @@ def compute_daily_metrics(
         "numeric_verdict": verdict,
         "provisional_reasons": provisional,
         "observations": _observations(wellness, target, signals),
+        "data_quality": _data_quality(
+            wellness, target, activities is not None, planned_events is not None
+        ),
         "definitions": DEFINITIONS,
     }
 
